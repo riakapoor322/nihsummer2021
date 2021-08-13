@@ -1,0 +1,70 @@
+library(GenomicRanges)
+library(GenomicAlignments)
+library(Gviz)
+library(Rsamtools)
+library(biomaRt)
+library(argparser)
+
+parser <- arg_parser("GViz Plot inputs")
+parser <- add_argument(parser,"genome", help = "Genome name")
+parser <- add_argument(parser, "chromosome", help="chromosome (number only)")
+parser <- add_argument(parser, "start", help="start point")
+parser <- add_argument(parser, "end", help="endpoint")
+parser <- add_argument(parser, "list", help="put bamFile path, use two backslashes")
+parser <- add_argument(parser, "savepath", help="put path to save pdf of plots")
+parser <-add_argument(parser, "titleList", help="list title of plots")
+argv <- parse_args(parser)
+
+options(ucscChromosomeNames=FALSE)
+
+afrom <-strtoi(argv$start, base = 0L)
+ato <-strtoi(argv$end, base = 0L)
+
+bamFileList <- as.list(unlist(strsplit(argv$list, ',', fixed = TRUE)))
+
+numFiles = length(bamFileList)
+dataTrackList = vector(mode = "list", length = numFiles)
+
+for(i in 1:numFiles){
+  dataTrackList[i] = paste("dtrack", i, sep = "")
+}
+
+counter = 0
+for (file in bamFileList){
+   counter = counter + 1
+    title = paste(titleList[counter], "Coverage", sep = " ")
+    dataTrackNameList[counter] = DataTrack(showTitle = TRUE, name = title, range = file.path(bamFileList[counter]), genome = argv$genome, type = "l",window = -1, chromosome = argv$chromosome)
+}  
+
+
+alignmentTracks = vector(mode = "list", length = numFiles)
+counter = 0
+for (file in bamFileList){
+  counter = counter + 1
+  title = paste(titleList[counter], "Alignment Track", sep = " ")
+     alignmentTracks[counter] = AlignmentsTrack(showTitle = TRUE, name = title, file.path(bamFileList[counter]))
+}
+
+pdf(argv$savepath)
+plotTracks(dataTrackNameList, from = afrom, to = ato)
+plotTracks(alignmentTracks,chromosome= argv$chromosome, from=afrom,to=ato, col.gap="Red",col.mate="Blue")
+
+martList <- listMarts()
+mart = useMart("ENSEMBL_MART_ENSEMBL")
+dataList <- listDatasets(mart)
+mart = useMart("ENSEMBL_MART_ENSEMBL", dataset="hsapiens_gene_ensembl") 
+filterList <- listFilters(mart)
+bgrTrack_hav <- BiomartGeneRegionTrack(genome=argv$genome,end=ato, chromosome = argv$chromosome, name="ENSEMBL",filter=list(source="ensembl_havana"))
+
+plotTracks(bgrTrack_hav)
+
+comparisonList = vector(mode = "list", length = numFiles+1)
+counter = 0
+for(i in alignmentTracks){
+  counter = counter + 1
+  comparisonList[counter] = alignmentTracks[counter]
+}
+comparisonList[numFiles +1] = bgrTrack_hav
+
+plotTracks(comparisonList, from = afrom, to = ato, chromosome = argv$chromosome)
+graphics.off()
